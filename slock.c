@@ -7,6 +7,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <grp.h>
+#include <Imlib2.h>
 #include <pwd.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -35,6 +36,7 @@ struct lock {
 	int screen;
 	Window root, win;
 	Pixmap pmap;
+	Pixmap bgmap;
 	unsigned long colors[NUMCOLS];
 };
 
@@ -45,6 +47,8 @@ struct xrandr {
 };
 
 #include "config.h"
+
+Imlib_Image image;
 
 static void
 die(const char *errstr, ...)
@@ -189,13 +193,18 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 			}
 			color = len ? INPUT : ((failure || failonclear) ? FAILED : INIT);
 			if (running && oldc != color) {
-				for (screen = 0; screen < nscreens; screen++) {
-					XSetWindowBackground(dpy,
-					                     locks[screen]->win,
-					                     locks[screen]->colors[color]);
-					XClearWindow(dpy, locks[screen]->win);
-				}
-				oldc = color;
+                                for (screen = 0; screen < nscreens; screen++) {
+                                        if (locks[screen]->bgmap)
+                                                XSetWindowBackgroundPixmap(
+                                                                dpy, locks[screen]->win,
+                                                                locks[screen]->bgmap);
+                                        else
+                                                XSetWindowBackground(
+                                                                dpy, locks[screen]->win,
+                                                                locks[screen]->colors[color]);
+                                        XClearWindow(dpy, locks[screen]->win);
+                                }
+                                oldc = color;
 			}
 		} else if (rr->active && ev.type == rr->evbase + RRScreenChangeNotify) {
 			rre = (XRRScreenChangeNotifyEvent*)&ev;
@@ -223,7 +232,8 @@ static struct lock *
 lockscreen(Display *dpy, struct xrandr *rr, int screen)
 {
 	char curs[] = {0, 0, 0, 0, 0, 0, 0, 0};
-	int i, ptgrab, kbgrab;
+	int i, ptgrab, kbgrab, dw, dh, dd, dc;
+        Visual *dv;
 	struct lock *lock;
 	XColor color, dummy;
 	XSetWindowAttributes wa;
@@ -232,32 +242,65 @@ lockscreen(Display *dpy, struct xrandr *rr, int screen)
 	if (dpy == NULL || screen < 0 || !(lock = malloc(sizeof(struct lock))))
 		return NULL;
 
+        dw = DisplayWidth(dpy, lock->screen);
+        dh = DisplayHeight(dpy, lock->screen);
+        dd = DefaultDepth(dpy, lock->screen);
+        dc = DefaultColormap(dpy, lock->screen);
+        dv = DefaultVisual(dpy, lock->screen);
+
 	lock->screen = screen;
+        lock->bgmap = (Pixmap)NULL;
 	lock->root = RootWindow(dpy, lock->screen);
 
-	for (i = 0; i < NUMCOLS; i++) {
-		XAllocNamedColor(dpy, DefaultColormap(dpy, lock->screen),
-		                 colorname[i], &color, &dummy);
+        for (i = 0; i < NUMCOLS; i++) {
+		XAllocNamedColor(dpy, dc,
+                                colorname[i], &color, &dummy);
 		lock->colors[i] = color.pixel;
 	}
 
 	/* init */
 	wa.override_redirect = 1;
 	wa.background_pixel = lock->colors[INIT];
-	lock->win = XCreateWindow(dpy, lock->root, 0, 0,
-	                          DisplayWidth(dpy, lock->screen),
-	                          DisplayHeight(dpy, lock->screen),
-	                          0, DefaultDepth(dpy, lock->screen),
-	                          CopyFromParent,
-	                          DefaultVisual(dpy, lock->screen),
-	                          CWOverrideRedirect | CWBackPixel, &wa);
-	lock->pmap = XCreateBitmapFromData(dpy, lock->win, curs, 8, 8);
-	invisible = XCreatePixmapCursor(dpy, lock->pmap, lock->pmap,
-	                                &color, &color, 0, 0);
-	XDefineCursor(dpy, lock->win, invisible);
+	lock->win = XCreateWindow(dpy, lock->root, 0, 0, dw, dh, 0, dd,
+                        CopyFromParent, dv,
+                        CWOverrideRedirect | CWBackPixel, &wa);
+        lock->pmap = XCreateBitmapFromData(dpy, lock->win, curs, 8, 8);
+        invisible = XCreatePixmapCursor(dpy, lock->pmap, lock->pmap,
+                        &color, &color, 0, 0);
+        XDefineCursor(dpy, lock->win, invisible);
+
+        if (image) {
+                int iw, ih;
+                Imlib_Image buf;
+                lock->bgmap = XCreatePixmap(dpy, lock->root, dw, dh, dd);
+
+                imlib_set_font_cache_size(dw * dh);
+                imlib_context_set_display(dpy);
+                imlib_context_set_visual(dv);
+                imlib_context_set_colormap(dc);
+                imlib_context_set_drawable(lock->bgmap);
+
+                buf = imlib_create_image(dw, dh);
+                imlib_context_set_blend(1);
+                imlib_context_set_image(image);
+                iw = imlib_image_get_width();
+                ih = imlib_image_get_height();
+                imlib_context_set_image(buf);
+                if (image)
+                {
+                        imlib_blend_image_onto_image(image, 0, 0, 0, iw, ih, 0, 0, dw, dh);
+                        imlib_render_image_on_drawable(0, 0);
+                        imlib_context_set_image(image);
+                        imlib_free_image();
+                }
+        }
+
+        if (lock->bgmap)
+                XSetWindowBackgroundPixmap(dpy, lock->win, lock->bgmap);
 
 	/* Try to grab mouse pointer *and* keyboard for 600ms, else fail the lock */
 	for (i = 0, ptgrab = kbgrab = -1; i < 6; i++) {
+
 		if (ptgrab != GrabSuccess) {
 			ptgrab = XGrabPointer(dpy, lock->root, False,
 			                      ButtonPressMask | ButtonReleaseMask |
@@ -300,7 +343,7 @@ lockscreen(Display *dpy, struct xrandr *rr, int screen)
 static void
 usage(void)
 {
-	die("usage: slock [-v] [cmd [arg ...]]\n");
+	die("usage: slock [-v][-i <path>] [cmd [arg ...]]\n");
 }
 
 int
@@ -319,6 +362,13 @@ main(int argc, char **argv) {
 	case 'v':
 		fprintf(stderr, "slock-"VERSION"\n");
 		return 0;
+        case 'i':
+                if(argc != 2)
+                        usage();
+                image = imlib_load_image(argv[1]);
+                if (!image)
+                        die("slock: unable to load image.\n");
+                break;
 	default:
 		usage();
 	} ARGEND
@@ -382,9 +432,12 @@ main(int argc, char **argv) {
 		case 0:
 			if (close(ConnectionNumber(dpy)) < 0)
 				die("slock: close: %s\n", strerror(errno));
-			execvp(argv[0], argv);
-			fprintf(stderr, "slock: execvp %s: %s\n", argv[0], strerror(errno));
-			_exit(1);
+                        if (!image) {
+                          execvp(argv[0], argv);
+                          fprintf(stderr, "slock: execvp %s: %s\n", argv[0],
+                                  strerror(errno));
+                        }
+                        _exit(1);
 		}
 	}
 
@@ -393,3 +446,4 @@ main(int argc, char **argv) {
 
 	return 0;
 }
+

@@ -1,6 +1,7 @@
 /* user and group to drop privileges to */
-static const char *user  = "nobody";
+static const char *user  = "aiden";
 static const char *group = "wheel";
+/* FIXME: when using with -i, user must be the image owner */
 
 static const char *colorname[NUMCOLS] = {
 	[INIT] =   "black",     /* after initialization */
