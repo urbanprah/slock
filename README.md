@@ -23,4 +23,11 @@ xss-lock -n /usr/lib/xsecurelock/dimmer -l -- /usr/local/bin/slock &
 * [ ] Image changes on keypresses
 * [ ] Proper image scaling for multihead
 * [ ] Per monitor configuration
+* [ ] CapsLock indicator
+
+```c
+/* TODO: CapsLock indicator */
+if(!XkbGetIndicatorState(dpy, XkbUseCoreKbd, &indicators))
+        caps = indicators & 1;
+```
 
