@@ -59,3 +59,4 @@ uninstall:
 	@rm -f ${DESTDIR}${MANPREFIX}/man1/slock.1
 
 .PHONY: all options clean dist install uninstall
+
