@@ -23,6 +23,7 @@ xss-lock -n /usr/lib/xsecurelock/dimmer -l -- /usr/local/bin/slock &
 * [ ] Image changes on keypresses
 * [ ] Proper image scaling for multihead
 * [ ] Per monitor configuration
+* [ ] Disable input (keep screen) option
 * [ ] CapsLock indicator
 
 ```c

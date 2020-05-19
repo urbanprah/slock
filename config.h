@@ -20,4 +20,3 @@ static const char * text_color = "#ffffff";
 
 /* text size (must be a valid size) */
 static const char * font_name = "-misc-fixed-medium-r-semicondensed--0-0-200-200-c-0-iso8859-1";
-
