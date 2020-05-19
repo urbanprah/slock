@@ -105,7 +105,7 @@ dpmsloop(void* arg)
 
         while(1) {
                 DPMSInfo(dpy, &power, &state);
-                if(power)
+                if(power == 1 || power == 2)
                         *toggle = 1; /* Display is off */
                 else {
                         usleep(100000); /* wake delay */
@@ -374,8 +374,10 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 				}
 			}
 		} else {
-			for (screen = 0; screen < nscreens; screen++)
-				XRaiseWindow(dpy, locks[screen]->win);
+			for (screen = 0; screen < nscreens; screen++) {
+                                writemessage(dpy, locks[screen]->win, screen);
+                                XRaiseWindow(dpy, locks[screen]->win);
+                        }
 		}
 	}
         /* Terminate DPMS state loop */
@@ -599,9 +601,12 @@ main(int argc, char **argv) {
 		die("slock: DPMSEnable failed\n");
 	if (!DPMSGetTimeouts(dpy, &standby, &suspend, &off))
 		die("slock: DPMSGetTimeouts failed\n");
+        if (dpms[0] == -1) dpms[0] = standby;
+        if (dpms[1] == -1) dpms[1] = suspend;
+        if (dpms[2] == -1) dpms[2] = off;
 	/* if (!standby || !suspend || !off) */
 	/* 	die("slock: at least one DPMS variable is zero\n"); */
-	if (!DPMSSetTimeouts(dpy, monitortime, monitortime, monitortime))
+	if (!DPMSSetTimeouts(dpy, dpms[0], dpms[1], dpms[2]))
 		die("slock: DPMSSetTimeouts failed\n");
 	XSync(dpy, 0);
 

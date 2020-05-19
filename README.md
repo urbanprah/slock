@@ -6,6 +6,7 @@ Changes
 -------
 * ability to set a background image (in early development)
 * dynamic display state detection via DPMS. This enables waking the display with the keyboard input being treated as password input
+* Improved dpms patch that allows specific system setting overrides ```{ standby, suspend, off } ```
 
 Using slock
 -------------
@@ -25,6 +26,7 @@ xss-lock -n /usr/lib/xsecurelock/dimmer -l -- /usr/local/bin/slock &
 * [ ] Per monitor configuration
 * [ ] Disable input (keep screen) option
 * [ ] CapsLock indicator
+* [ ] No text on waking from suspend
 
 ```c
 /* TODO: CapsLock indicator */
