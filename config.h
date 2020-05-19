@@ -4,8 +4,8 @@ static const char *group = "wheel";
 /* FIXME: when using with -i, user must be the image owner */
 
 static const char *colorname[NUMCOLS] = {
-	[INIT] =   "black",     /* after initialization */
-	[INPUT] =  "#005577",   /* during input */
+	[INIT]   =  "black",    /* after initialization */
+	[INPUT]  = "#005577",   /* during input */
 	[FAILED] = "#CC3333",   /* wrong password */
 };
 

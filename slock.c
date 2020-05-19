@@ -231,16 +231,39 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 	XRRScreenChangeNotifyEvent *rre;
 	char buf[32], passwd[256], *inputhash;
 	int num, screen, running, failure, oldc;
-	unsigned int len, color;
+	unsigned int len, color, init;
 	KeySym ksym;
 	XEvent ev;
 
+        init = 1;
 	len = 0;
 	running = 1;
 	failure = 0;
-	oldc = INIT;
+        oldc = INIT;
 
 	while (running && !XNextEvent(dpy, &ev)) {
+                if(init) {
+                        /* Pre-render slock:
+                         * Without this, waking the screen from dpms
+                         * would result in frozen window content that
+                         * was displayed before slock was started
+                         * (slock would only be displayed after a key press).
+                         */
+                        for (screen = 0; screen < nscreens; screen++) {
+                                if (locks[screen]->bgmap)
+                                        XSetWindowBackgroundPixmap(
+                                                        dpy, locks[screen]->win,
+                                                        locks[screen]->bgmap);
+                                else
+                                        XSetWindowBackground(
+                                                        dpy, locks[screen]->win,
+                                                        locks[screen]->colors[INIT]);
+                                XClearWindow(dpy, locks[screen]->win);
+                                writemessage(dpy, locks[screen]->win, screen);
+
+                        }
+                        init = 0;
+                }
 		if (ev.type == KeyPress) {
 			explicit_bzero(&buf, sizeof(buf));
 			num = XLookupString(&ev.xkey, buf, sizeof(buf), &ksym, 0);
