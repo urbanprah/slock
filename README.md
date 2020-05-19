@@ -5,6 +5,7 @@ My build of suckless' [slock](https://tools.suckless.org/slock/), the simple scr
 Changes
 -------
 * ability to set a background image (in early development)
+* dynamic display state detection via DPMS. This enables waking the display with the keyboard input being treated as password input
 
 Using slock
 -------------
@@ -20,7 +21,6 @@ xss-lock -n /usr/lib/xsecurelock/dimmer -l -- /usr/local/bin/slock &
 
 #### TODO
 * [ ] Image effects
-* [ ] Image changes on keypresses
 * [ ] Proper image scaling for multihead
 * [ ] Per monitor configuration
 * [ ] Disable input (keep screen) option
@@ -31,4 +31,3 @@ xss-lock -n /usr/lib/xsecurelock/dimmer -l -- /usr/local/bin/slock &
 if(!XkbGetIndicatorState(dpy, XkbUseCoreKbd, &indicators))
         caps = indicators & 1;
 ```
-

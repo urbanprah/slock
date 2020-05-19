@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <grp.h>
 #include <Imlib2.h>
+#include <pthread.h>
 #include <pwd.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -15,6 +16,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <X11/extensions/dpms.h>
 #include <X11/extensions/Xrandr.h>
 #include <X11/extensions/Xinerama.h>
 #include <X11/keysym.h>
@@ -90,6 +92,29 @@ dontkillme(void)
 	}
 }
 #endif
+
+void *
+dpmsloop(void* arg)
+{
+        Display* dpy;
+        CARD16 power;
+        BOOL state;
+        unsigned int* toggle = (unsigned int *)arg;
+	if (!(dpy = XOpenDisplay(NULL)))
+		die("slock: cannot open display\n");
+
+        while(1) {
+                DPMSInfo(dpy, &power, &state);
+                if(power)
+                        *toggle = 1; /* Display is off */
+                else {
+                        usleep(100000); /* wake delay */
+                        *toggle = 0; /* Display is on */
+                }
+                usleep(100000);
+        }
+        return NULL;
+}
 
 static void
 writemessage(Display *dpy, Window win, int screen)
@@ -229,9 +254,10 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
        const char *hash)
 {
 	XRRScreenChangeNotifyEvent *rre;
+        pthread_t dpms_thread;
 	char buf[32], passwd[256], *inputhash;
 	int num, screen, running, failure, oldc;
-	unsigned int len, color, init;
+	unsigned int len, color, init, wakekey;
 	KeySym ksym;
 	XEvent ev;
 
@@ -241,6 +267,8 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 	failure = 0;
         oldc = INIT;
 
+        /* Start DPMS state loop */
+        pthread_create(&dpms_thread, NULL, dpmsloop, (void *)&wakekey);
 	while (running && !XNextEvent(dpy, &ev)) {
                 if(init) {
                         /* Pre-render slock:
@@ -265,6 +293,9 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
                         init = 0;
                 }
 		if (ev.type == KeyPress) {
+                        /* Ignore a key press if display is off  */
+                        if(wakekey)
+                                continue;
 			explicit_bzero(&buf, sizeof(buf));
 			num = XLookupString(&ev.xkey, buf, sizeof(buf), &ksym, 0);
 			if (IsKeypadKey(ksym)) {
@@ -347,6 +378,9 @@ readpw(Display *dpy, struct xrandr *rr, struct lock **locks, int nscreens,
 				XRaiseWindow(dpy, locks[screen]->win);
 		}
 	}
+        /* Terminate DPMS state loop */
+        pthread_cancel(dpms_thread);
+
 }
 
 static struct lock *
